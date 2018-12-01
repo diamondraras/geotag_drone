@@ -48,12 +48,13 @@ base_init_z = ''
 base_ppk_x = ''
 base_ppk_y = ''
 base_ppk_z = ''
+valeur_angle_fixe = ''
 
 message=''
 type_message=''
 #variable
 def root_main():
-    global message,type_message,offsetx_pivot1,offsety_pivot1,offsetz_pivot1,latence,offsetx_pivot2,offsety_pivot2,offsetz_pivot2,folder_path,filelog,error_type,error_message,custom_path,type_epsg,fichierlog, custom_path, error_type, error_message
+    global message,type_message,offsetx_pivot1,offsety_pivot1,offsetz_pivot1,latence,offsetx_pivot2,offsety_pivot2,offsetz_pivot2,folder_path,filelog,error_type,error_message,custom_path,type_epsg,fichierlog, custom_path, error_type, error_message, valeur_angle_fixe
 
     #liste des fonction
     def OpenFile():
@@ -63,6 +64,17 @@ def root_main():
         if name!= '' :
             filelog.set(name)
 
+    # def activate_gps():   
+    #     offsetx_gps.config(state="normal")
+    #     offsety_gps.config(state="normal")
+    #     offsetz_gps.config(state="normal")
+    #     print("activate_gps")
+
+    # def desactivate_gps():
+    #     offsetx_gps.config(state="disable")
+    #     offsety_gps.config(state="disable")
+    #     offsetz_gps.config(state="disable")
+    #     print("desactivate_gps")
 
     def browse_button():
         global folder_path,custom_path
@@ -96,6 +108,14 @@ def root_main():
         offsetx_pivot2.config(state='disable')
         offsety_pivot2.config(state='disable')
         offsetz_pivot2.config(state='disable')
+        
+    def nacelle_fixe():
+        global valeur_angle_fixe
+        valeur_angle_fixe.config(state="normal")
+
+    def nacelle_mobile():
+        global valeur_angle_fixe
+        valeur_angle_fixe.config(state="disable")
 
 
     def help_button():
@@ -107,7 +127,6 @@ def root_main():
     def process_button():
 
         global error_type,error_message,x_gps,y_gps,z_gps,x_cam,y_cam,z_cam,epsg,message, type_message
-
 
         if fichierlog == '':
             error_type = 'ERREUR DE FICHIER'
@@ -125,6 +144,7 @@ def root_main():
             error_type = 'VALEUR LATENCE INCORRECTE'
             error_message = 'Entrer une valeur entière'
             show_error()
+            
         else:
             try:
                 x_gps = float(offsetx_gps.get())
@@ -151,15 +171,37 @@ def root_main():
 
                     data = read_data(fichierlog)
                     # gps = get_filtered_data(data,gps_value.get())
-                    offset_x, offset_y = metric_to_wgs84(init_x-ppk_x , init_y-ppk_y,type_epsg.get())
+                    # offset_x, offset_y = dist_metric_to_wgs84(init_x-ppk_x , init_y-ppk_y,type_epsg.get())
+
+                    offset_x = init_x-ppk_x
+                    offset_y = init_y-ppk_y
                     offset_z = init_z-ppk_z
-                    offset = offset_x, offset_y, offset_z
-                    # print(offset)
-                    structured_gps = get_structured_gps(data,gps_value.get(), offset, latence_value)
+                    # offset = offset_x, offset_y, offset_z
+                    # print(offset_x,offset_y)
+
+                    #Quand le paramètre gps1 est gps
+                    # if gps_value.get() == "GPS":
+                    #     print("GPS 1")
+                    #     x_gps = 0
+                    #     y_gps = 0
+                    #     z_gps = 0
+                    structured_gps = get_structured_gps(data,gps_value.get(), latence_value)
+
+
+
+
                     structured_att = get_structured_data(data,"ATT")
                     cam = get_filtered_data(data,"CAM")
                     lat_interpolated , long_interpolated , alt_interpolated = tri_interpolate(structured_gps,7,8,9)
                     roll_interpolated , pitch_interpolated , yaw_interpolated = tri_interpolate(structured_att,3,5,7)
+
+                    lat_interpolated = [row-offset_x for row in lat_interpolated]
+                    long_interpolated = [row-offset_y for row in long_interpolated]
+                    alt_interpolated = [row-offset_z for row in alt_interpolated]
+                    # lat_interpolated , long_interpolated , alt_interpolated = lat_interpolated-offset_x , long_interpolated-offset_y, alt_interpolated-offset_z
+
+                    # for a,b,c,d,e,f in zip(lat_interpolated , long_interpolated , alt_interpolated, roll_interpolated , pitch_interpolated , yaw_interpolated):
+                    #     print(a,b,c,d,e,f)
                     time_US = [row[1] for row in cam]
                     srt = str(fichierlog.split('/')[-1]).split('.')[0]
                     
@@ -169,6 +211,9 @@ def root_main():
                         lat_interpolated_metric.append(wgs84_to_metric(lat_interpolated[i],long_interpolated[i],type_epsg.get())[0])
                         long_interpolated_metric.append(wgs84_to_metric(lat_interpolated[i],long_interpolated[i],type_epsg.get())[1])
 
+                    # for a,b,c,d,e,f in zip(lat_interpolated_metric , long_interpolated_metric , alt_interpolated, roll_interpolated , pitch_interpolated , yaw_interpolated):
+                    #     print(a,b,c,d,e,f)
+
                     alt_interpolated_metric = alt_interpolated
                     
                     dx = list()
@@ -177,6 +222,8 @@ def root_main():
                     x_after_project_cam_in_gps = list()
                     y_after_project_cam_in_gps = list()
                     z_after_project_cam_in_gps = list()
+
+                    angles = []
                     if(int(offset_pivot.get())):
                         
                         output_folder = custom_path+"/"+srt+" (pivot activé)"
@@ -190,16 +237,34 @@ def root_main():
                         except OSError:
                             pass
                         
-                        for line in data:
-                            for elem in line:
-                                if elem == " MNT_RC_IN_TILT" :
-                                    MNT_RC_IN_TILT = int(line[line.index(elem)+1])
-                                    break
+                        print(int(nacelle_fixe_boolean.get()))
+                        
+                        if int(nacelle_fixe_boolean.get())==0:
+                            for line in data:
+                                for elem in line:
+                                    if elem == " MNT_RC_IN_TILT" :
+                                        MNT_RC_IN_TILT = int(line[line.index(elem)+1])
+                                        break
 
-                        index_of_rcin = MNT_RC_IN_TILT+1
-                        structured_rcin = get_structured_data(data, "RCIN")
-                        rcin = interpolate(structured_rcin, index_of_rcin)
-                        angles = [transform_to_angle(row) for row in rcin]
+                            index_of_rcin = MNT_RC_IN_TILT+1
+                            structured_rcin = get_structured_data(data, "RCIN")
+                            rcin = interpolate(structured_rcin, index_of_rcin)
+                            angles = [transform_to_angle(row) for row in rcin]
+
+
+                        else:
+
+                            try:
+                                print(valeur_angle_fixe.get())
+                                angle = int(valeur_angle_fixe.get())
+                                for i in range(len(cam)):
+                                    angles.append(angle)
+                            except ValueError as e:
+                                print(e)
+                                error_type = 'VALEUR ANGLE INCORRECTE'
+                                error_message = 'Entrer une valeur entière'
+                                show_error()
+                        print(angles)
 
                         for i in range(len(cam)):
                             new_x , new_y , new_z = project_cam_in_gps(lat_interpolated_metric[i], long_interpolated_metric[i], alt_interpolated[i],
@@ -246,24 +311,119 @@ def root_main():
                             dx.append(lat_interpolated_metric[i] - x)
                             dy.append(long_interpolated_metric[i] - y)
                             dz.append(alt_interpolated[i] - z)
-                    write_to_metric(path_detailed,"position metric du gps.log",time_US,lat_interpolated_metric, long_interpolated_metric,alt_interpolated_metric,roll_interpolated,pitch_interpolated,yaw_interpolated)
 
-                    write_csv(output_folder,srt+"_geotag_metric.csv",time_US,x_after_project_cam_in_gps, y_after_project_cam_in_gps,z_after_project_cam_in_gps,roll_interpolated,pitch_interpolated,yaw_interpolated)
-                    write_log(output_folder,srt+"_geotag_metric.log",time_US,x_after_project_cam_in_gps, y_after_project_cam_in_gps,z_after_project_cam_in_gps,roll_interpolated,pitch_interpolated,yaw_interpolated)
+                    write_to_metric(prefix.get(),chiffre_depart.get(),suffix.get(), path_detailed,"position wgs84 interpolé.log",time_US,lat_interpolated, long_interpolated,alt_interpolated,roll_interpolated,pitch_interpolated,yaw_interpolated)
+                    write_to_metric(prefix.get(),chiffre_depart.get(),suffix.get(), path_detailed,"position metric interpolé.log",time_US,lat_interpolated_metric, long_interpolated_metric,alt_interpolated_metric,roll_interpolated,pitch_interpolated,yaw_interpolated)
+                    
+                    indice_de_precision = []
+                    for i, e in enumerate(cam):
+                        # x_after_project_cam_in_gps[i] -= offset_x 
+                        # y_after_project_cam_in_gps[i] -= offset_y
+                        # z_after_project_cam_in_gps[i] -= offset_z
+                        
+                        statut_gps_avant = int(structured_gps[i][0][2])
+                        statut_gps_apres = int(structured_gps[i][2][2])
+
+                        if statut_gps_avant==6 and statut_gps_apres==6:
+                            indice_de_precision.append(0.01)
+                        elif statut_gps_apres==5 or statut_gps_apres ==5:
+                            indice_de_precision.append(1)
+                        elif statut_gps_avant<5 or statut_gps_apres<5 :
+                            indice_de_precision.append(10)
+
+                    write_csv(prefix.get(),
+                                chiffre_depart.get(),
+                                suffix.get(),
+                                output_folder,
+                                srt+"_geotag_metric.csv",
+                                time_US,
+                                x_after_project_cam_in_gps,
+                                 y_after_project_cam_in_gps,
+                                 z_after_project_cam_in_gps,
+                                 roll_interpolated,
+                                 pitch_interpolated,
+                                 yaw_interpolated,
+                                 indice_de_precision,
+                                 angles)
+                    write_log(prefix.get(),
+                                chiffre_depart.get(),
+                                suffix.get(),
+                                output_folder,
+                                srt+"_geotag_metric.log",
+                                time_US,
+                                x_after_project_cam_in_gps,
+                                 y_after_project_cam_in_gps,
+                                 z_after_project_cam_in_gps,
+                                 roll_interpolated,
+                                 pitch_interpolated,
+                                 yaw_interpolated,
+                                 indice_de_precision,
+                                 angles)
 
                     lat_wgs_final = list()
                     long_wgs_final = list()
                     for i in range(len(cam)):
                         
-                        lat_wgs_final.append(metric_to_wgs84(x_after_project_cam_in_gps[i],y_after_project_cam_in_gps[i],type_epsg.get())[0])
-                        long_wgs_final.append(metric_to_wgs84(x_after_project_cam_in_gps[i],y_after_project_cam_in_gps[i],type_epsg.get())[1])
+                        lat_wgs_final.append(metric_to_wgs84(x_after_project_cam_in_gps[i],
+                        y_after_project_cam_in_gps[i],
+                        type_epsg.get())[0])
+                        long_wgs_final.append(metric_to_wgs84(x_after_project_cam_in_gps[i],
+                        y_after_project_cam_in_gps[i],
+                        type_epsg.get())[1])
                    
                     alt_wgs_final = z_after_project_cam_in_gps
-                    write_csv(output_folder,srt+"_geotag_wgs84.csv",time_US,lat_wgs_final,long_wgs_final,alt_wgs_final,roll_interpolated,pitch_interpolated,yaw_interpolated)
-                    write_log(output_folder,srt+"_geotag_wgs84.log",time_US,lat_wgs_final,long_wgs_final,alt_wgs_final,roll_interpolated,pitch_interpolated,yaw_interpolated)
 
-                    write_difference_log(path_detailed,"différence(positionGPS-positionCAM).log", time_US ,dx , dy, dz)
-                    write_difference_csv(path_detailed,"différence(positionGPS-positionCAM).csv", time_US ,dx , dy, dz)
+                    write_csv(prefix.get(),
+                    chiffre_depart.get(),
+                    suffix.get(),
+                    output_folder,
+                    srt+"_geotag_wgs84.csv",
+                    time_US,
+                    lat_wgs_final,
+                    long_wgs_final,
+                    alt_wgs_final,
+                    roll_interpolated,
+                    pitch_interpolated,
+                    yaw_interpolated,
+                    indice_de_precision,
+                    angles)
+
+                    write_log(prefix.get(),
+                    chiffre_depart.get(),
+                    suffix.get(),
+                    output_folder,
+                    srt+"_geotag_wgs84.log",
+                    time_US,
+                    lat_wgs_final,
+                    long_wgs_final,
+                    alt_wgs_final,
+                    roll_interpolated,
+                    pitch_interpolated,
+                    yaw_interpolated,
+                    indice_de_precision,
+                    angles)
+
+
+                    write_difference_log(prefix.get(),
+                    chiffre_depart.get(),
+                    suffix.get(),
+                    path_detailed,
+                    "différence(positionGPS-positionCAM).log",
+                    time_US ,
+                    dx ,
+                    dy,
+                    dz)
+
+                    write_difference_csv(prefix.get(),
+                    chiffre_depart.get(),
+                    suffix.get(),
+                    path_detailed,
+                    "différence(positionGPS-positionCAM).csv",
+                    time_US ,
+                    dx ,
+                    dy,
+                    dz)
+
 
                     numero = list(np.arange(1,len(time_US)+1, 1))
                     labels_in_x = list(np.arange(0,len(time_US)+1,5))
@@ -312,10 +472,10 @@ def root_main():
                     error_type = 'PARAMETRE EPSG INCORRECTE'
                     error_message = 'Entrer une valeur entière'
                     show_error()
-                except IndexError:
-                    error_type = 'FICHIER .LOG INCORRECTE'
-                    error_message = 'Sélectionner un fichier .log du drone correcte'
-                    show_error()
+                # except IndexError:
+                #     error_type = 'FICHIER .LOG ou Paramètre GPS INCORRECTE '
+                #     error_message = 'Sélectionner un fichier .log du drone correcte ou vérifier le paramètre GPS'
+                #     show_error()
                 except RuntimeError:
                     error_type = 'VALEUR EPSG INCORRECTE'
                     error_message = 'Voir www.spatialreference.com'
@@ -323,6 +483,10 @@ def root_main():
                 except PermissionError:
                     error_type = 'ACCES FICHIER IMPOSSIBLE'
                     error_message = 'Fermer tous les processus ouvrant vos fichiers'
+                    show_error()
+                except GpsException:
+                    error_type = 'PARAMETRE GPS INCOMPATIBLE'
+                    error_message = 'Le fichier log ne peut pas être traité par ce paramètre gps'
                     show_error()
 
 
@@ -402,6 +566,7 @@ def root_main():
     cvo.place(relx=.27,rely=.42, anchor='w')
     cvo.create_text(50,25,anchor='w',fill='#000',justify=CENTER,font=Font(family='Liberation Serif', size=11),text='PARAMETRE PIVOT')
     offset_pivot = StringVar(root,value=False)
+    nacelle_fixe_boolean = StringVar(root,value=False)
     offset1 = Radiobutton(root, text="Activer ",command=activation_pivot,value=True, variable=offset_pivot, indicatoron=0, borderwidth=0, width=15, padx=1, pady=1, fg="#000", bg="#ccc", selectcolor="#fe8134x", activebackground="#fe8134x")
     offset1.place(relx=0.27, rely=.48)
     offset2 = Radiobutton(root, text="Desactiver",command=desactivation_pivot,state='active', value=False,variable = offset_pivot, indicatoron=0, borderwidth=0, width=15, padx=1, pady=1, fg="#000", bg="#ccc", selectcolor="#fe8134x", activebackground="#fe8134x")
@@ -549,7 +714,39 @@ def root_main():
     process.config(height='2',width='20')
     process.place(relx=.40, rely=.95, anchor="w")
     help = Button(root,text="?", bg="#fe8134x", fg="white",command=help_button,font=Font(family='Liberation Serif', size=14),activebackground="#fe8134x",activeforeground ="#fff",highlightthickness=0,highlightbackground='#fff')
-    help.place(relx=.95, rely=.95, anchor="w")
+    help.place(relx=.97, rely=.95, anchor="w")
 
+
+    # Interface de gestion resultat final
+    cv1 = Canvas(root,width=270,height=2,bg='#fe8134x')
+    cv1.place(relx=0.04,rely=.89, anchor='w')
+
+    label_prefix = Label(root,text='Préfixe', font=Font(family='Liberation Serif', size=8),fg='#000')
+    label_prefix.place(relx=0.048,rely=.920)
+    prefix = Entry(root,bd=0,insertwidth=1,width=6,state='normal',font = Font(family='Liberation Serif', size=12),textvariable=StringVar(root,value="_DSC0"),takefocus=0)
+    prefix.place(relx=0.04,rely=.960, anchor='w')
+
+    label_chiffre_depart = Label(root,text='Chiffre de départ', font=Font(family='Liberation Serif', size=8),fg='#000')
+    label_chiffre_depart.place(relx=0.117,rely=.920)
+    chiffre_depart = Entry(root,bd=0,insertwidth=1,width=10,state='normal',font = Font(family='Liberation Serif', size=12),textvariable=StringVar(root,value=1),takefocus=0)
+    chiffre_depart.place(relx=0.117,rely=.960, anchor='w')
+    
+    label_suffix = Label(root,text='Suffixe', font=Font(family='Liberation Serif', size=8),fg='#000')
+    label_suffix.place(relx=0.225,rely=.920)
+    suffix = Entry(root,bd=0,insertwidth=1,width=6,state='normal',font = Font(family='Liberation Serif', size=12),textvariable=StringVar(root,value=".JPG"),takefocus=0)
+    suffix.place(relx=0.22,rely=.960, anchor='w')
+
+    # Interface configuration nacelle
+    cv2 = Canvas(root,width=270,height=2,bg='#fe8134x')
+    cv2.place(relx=0.715,rely=.89, anchor='w')
+    nacelle_fixe_radio = Radiobutton(root, text="Nacelle Fixe",command=nacelle_fixe,value=True, variable=nacelle_fixe_boolean, indicatoron=0, borderwidth=0, width=16, padx=1, pady=1, fg="#000", bg="#ccc", selectcolor="#fe8134x", activebackground="#fe8134x")
+    nacelle_fixe_radio.place(relx=0.7155, rely=.91)
+    nacelle_mobile_radio = Radiobutton(root, text="Nacelle Mobile",command=nacelle_mobile,state='active', value=False,variable = nacelle_fixe_boolean, indicatoron=0, borderwidth=0, width=16, padx=1, pady=1, fg="#000", bg="#ccc", selectcolor="#fe8134x", activebackground="#fe8134x")
+    nacelle_mobile_radio.place(relx=0.845,rely=0.91)
+
+    label_valeur_angle_fixe = Label(root,text='Angle en degré', font=Font(family='Liberation Serif', size=8),fg='#000')
+    label_valeur_angle_fixe.place(relx=0.715,rely=.95)
+    valeur_angle_fixe = Entry(root,bd=0,insertwidth=1,width=3,state='disable',font = Font(family='Liberation Serif', size=12),textvariable=StringVar(root,value="-90"),takefocus=0)
+    valeur_angle_fixe.place(relx=0.79,rely=.960, anchor='w')
 
     root.mainloop()

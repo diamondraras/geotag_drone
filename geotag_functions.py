@@ -3,6 +3,8 @@ from numpy import array
 from pyproj import Proj, transform
 from math import cos,sin,pi,radians
 
+class GpsException(Exception):
+    pass
 
 def read_data(filename) :
     c = []
@@ -12,74 +14,112 @@ def read_data(filename) :
             c.append(line)
     return c
 
-def write_data(path,filename,timeUS,long_,lat,alt,roll,pitch,yaw):
+def write_data(prefix,start,suffix,path,filename,timeUS,long_,lat,alt,roll,pitch,yaw):
+    try:
+        start = int(start)
+    except ValueError:
+        start = 0
     with open(path+'/'+filename,'w', newline="") as csvfile:
         spamwriter = writer(csvfile, delimiter =",",quotechar ='|')
         spamwriter.writerow(["CAM","TimeUS","Longitude","Latitude","Altitude","Roll","Pitch","Yaw"])
         for i in range(len(timeUS)):
-            spamwriter.writerow(["Photo "+str(i+1),timeUS[i],str(long_[i]),str(lat[i]),str(alt[i]),roll[i],pitch[i],yaw[i]])
+            spamwriter.writerow([prefix+str(start+i)+suffix,timeUS[i],str(long_[i]),str(lat[i]),str(alt[i]),roll[i],pitch[i],yaw[i]])
 
-def write_to_metric(path,filename,timeUS,lat,long_,alt,roll,pitch,yaw):
+def write_to_metric(prefix,start,suffix,path,filename,timeUS,lat,long_,alt,roll,pitch,yaw):
+    try:
+        start = int(start)
+    except ValueError:
+        start = 0
     with open(path+'/'+filename,'w', newline="") as csvfile:
         spamwriter = writer(csvfile, delimiter =",",quotechar ='|')
         spamwriter.writerow(["CAM","TimeUS","Xprov","Yprov","Zprov","Roll","Pitch","Yaw"])
         for i in range(len(timeUS)):
-            spamwriter.writerow(["Photo "+str(i+1),timeUS[i],long_[i],lat[i],alt[i],roll[i],pitch[i],yaw[i]])
+            spamwriter.writerow([prefix+str(start+i)+suffix,timeUS[i],lat[i],long_[i],alt[i],roll[i],pitch[i],yaw[i]])
 
-def write_difference_log (path,filename,timeUS,diff_long , diff_lat, diff_alt):
+def write_difference_log (prefix,start,suffix,path,filename,timeUS,diff_long , diff_lat, diff_alt):
+    try:
+        start = int(start)
+    except ValueError:
+        start = 0
     with open(path+'/'+filename,'w', newline="") as csvfile:
         spamwriter = writer(csvfile, delimiter =",",quotechar ='|')
         spamwriter.writerow(["CAM","dx","dy","dz"])
         for i in range(len(timeUS)):
-            spamwriter.writerow(["Photo "+str(i+1),diff_long[i],diff_lat[i], diff_alt[i]])
+            spamwriter.writerow([prefix+str(start+i)+suffix,diff_long[i],diff_lat[i], diff_alt[i]])
 
-def write_difference_csv (path,filename,timeUS,diff_long , diff_lat, diff_alt):
+def write_difference_csv (prefix,start,suffix,path,filename,timeUS,diff_long , diff_lat, diff_alt):
+    try:
+        start = int(start)
+    except ValueError:
+        start = 0
     with open(path+'/'+filename,'w', newline="") as csvfile:
         spamwriter = writer(csvfile, delimiter =";",quotechar ='|')
         spamwriter.writerow(["CAM","dx","dy","dz"])
         for i in range(len(timeUS)):
-            spamwriter.writerow(["Photo "+str(i+1),diff_long[i],diff_lat[i], diff_alt[i]])
+            spamwriter.writerow([prefix+str(start+i)+suffix,diff_long[i],diff_lat[i], diff_alt[i]])
 
-def write_csv (path,filename,timeUS,diff_long , diff_lat, diff_alt ,r, p, y):
+def write_csv (prefix,start,suffix,path,filename,timeUS, diff_lat , diff_long, diff_alt ,r, p, y,precision,angles):
+    try:
+        start = int(start)
+    except ValueError:
+        start = 0
     with open(path+'/'+filename,'w', newline="") as csvfile:
         spamwriter = writer(csvfile, delimiter =";",quotechar ='|')
-        spamwriter.writerow(["CAM","X","Y","Z","Roll","Pitch","Yaw"])
-        for i in range(len(timeUS)):
-            spamwriter.writerow(["Photo "+str(i+1),str(diff_long[i]),str(diff_lat[i]), str(diff_alt[i]), r[i],p[i] ,y[i] ])
+        if len(angles) !=0:
+            spamwriter.writerow(["CAM","TimeUS", "X","Y","Z","Roll","Pitch","Yaw","Indice de précision (cm)","Angle nacelle"])
+            for i in range(len(timeUS)):
+                spamwriter.writerow([prefix+str(start+i)+suffix,timeUS[i],str(diff_lat[i]),str(diff_long[i]), str(diff_alt[i]), r[i],p[i] ,y[i],precision[i],angles[i]])
+        else:
+            spamwriter.writerow(["CAM","TimeUS", "X","Y","Z","Roll","Pitch","Yaw","Indice de précision (cm)"])
+            for i in range(len(timeUS)):
+                spamwriter.writerow([prefix+str(start+i)+suffix,timeUS[i],str(diff_lat[i]),str(diff_long[i]), str(diff_alt[i]), r[i],p[i] ,y[i],precision[i]])
 
-def write_log (path,filename,timeUS,diff_long , diff_lat, diff_alt ,r, p, y):
+def write_log (prefix,start,suffix,path,filename, timeUS, diff_lat , diff_long, diff_alt ,r, p, y,precision,angles):
+    try:
+        start = int(start)
+    except ValueError:
+        start = 0
     with open(path+'/'+filename,'w', newline="") as csvfile:
         spamwriter = writer(csvfile, delimiter =",",quotechar ='|')
-        spamwriter.writerow(["CAM","X","Y","Z","Roll","Pitch","Yaw"])
-        for i in range(len(timeUS)):
-            spamwriter.writerow(["Photo "+str(i+1),str(diff_long[i]),str(diff_lat[i]), str(diff_alt[i]), r[i],p[i] ,y[i] ])
+        if len(angles) !=0:
+            spamwriter.writerow(["CAM","TimeUS", "X","Y","Z","Roll","Pitch","Yaw","Indice de précision (cm)","Angle nacelle"])
+            for i in range(len(timeUS)):
+                spamwriter.writerow([prefix+str(start+i)+suffix,timeUS[i],str(diff_lat[i]),str(diff_long[i]), str(diff_alt[i]), r[i],p[i] ,y[i],precision[i],angles[i]])
+        else:
+            spamwriter.writerow(["CAM","TimeUS", "X","Y","Z","Roll","Pitch","Yaw","Indice de précision (cm)"])
+            for i in range(len(timeUS)):
+                spamwriter.writerow([prefix+str(start+i)+suffix,timeUS[i],str(diff_lat[i]),str(diff_long[i]), str(diff_alt[i]), r[i],p[i] ,y[i],precision[i]])
 
 
-def get_structured_gps(data,delimiter, offset, latence):
+def get_structured_gps(data,delimiter, latence):
 
     f = []
     for i,line in enumerate(data) :
-        if (line[0] == "CAM") :
-            temp = []
-            j=i-latence
-            k=i+latence
+        if line:
+            if (line[0] == "CAM"):
+                temp = []
+                j=i-1+latence
+                k=i+1+latence
+                while data[j][0] != delimiter:
+                    j-=1
 
-            while data[j][0] != delimiter:
-                j-=1
+                while data[k][0] != delimiter:
+                    k+=1
 
-            while data[k][0] != delimiter:
-                k+=1
-            data[j][7] = str(float(data[j][7])+ offset[0])
-            data[j][8] = str(float(data[j][8])+ offset[1])
-            data[j][9] = str(float(data[j][9])+ offset[2])
+                # if data[k][0] !=delimiter or data[j][0] !=delimiter:
+                #     raise GpsException("Paramètre GPS Incompatible")
+                temp.append(data[j])
+                temp.append(line)
+                temp.append(data[k])
+                f.append(temp)
+                # data[j][7] = str(float(data[j][7])+ offset[0])
+                # data[j][8] = str(float(data[j][8])+ offset[1])
+                # data[j][9] = str(float(data[j][9])+ offset[2])
 
-            data[k][7] = str(float(data[j][7])+ offset[0])
-            data[k][8] = str(float(data[j][8])+ offset[1])
-            data[k][9] = str(float(data[j][9])+ offset[2])
-            temp.append(data[j])
-            temp.append(line)
-            temp.append(data[k])
-            f.append(temp)
+                # data[k][7] = str(float(data[j][7])+ offset[0])
+                # data[k][8] = str(float(data[j][8])+ offset[1])
+                # data[k][9] = str(float(data[j][9])+ offset[2])
+    # print(f)
     return f
 
 
@@ -87,29 +127,31 @@ def get_structured_data(data,delimiter):
 
     f = []
     for i,line in enumerate(data) :
-        if (line[0] == "CAM") :
-            temp = []
-            j=i-1
-            k=i+1
+        if line :
+            if (line[0] == "CAM"):
+                temp = []
+                j=i-1
+                k=i+1
 
 
-            while data[j][0] != delimiter:
-                j-=1
+                while data[j][0] != delimiter:
+                    j-=1
 
-            while data[k][0] != delimiter:
-                k+=1
+                while data[k][0] != delimiter:
+                    k+=1
 
-            temp.append(data[j])
-            temp.append(line)
-            temp.append(data[k])
-            f.append(temp)
+                temp.append(data[j])
+                temp.append(line)
+                temp.append(data[k])
+                f.append(temp)
     return f
 
 def get_filtered_data(data,field):
     result = []
     for line in data:
-        if line[0]== field:
-            result.append(line)
+        if line:
+            if line[0]== field:
+                result.append(line)
     return result
 
 def interpolate(structured_data, field):
@@ -157,8 +199,6 @@ def tri_interpolate(structured_data, first_field , second_field, third_field):
     return first_interp , second_interp , third_interp
 
 def wgs84_to_metric(lat, long_, epsg):
-    result_lat = []
-    result_long = []
 
     inProj = Proj(init='epsg:4326')#wgs84
     outProj = Proj(init='epsg:'+str(epsg))#UTM 31N
@@ -166,13 +206,29 @@ def wgs84_to_metric(lat, long_, epsg):
     return transform(inProj,outProj,long_,lat)
 
 def metric_to_wgs84(lat, long_,epsg):
-    result_lat = []
-    result_long = []
 
     outProj = Proj(init='epsg:4326')#wgs84
     inProj = Proj(init='epsg:'+str(epsg))#UTM 31N
+    a, b = transform(inProj,outProj,lat,long_)
+    return b, a
 
-    return transform(inProj,outProj,long_,lat)
+def dist_metric_to_wgs84(dist_lat, dist_long_,epsg):
+    outproj = Proj(init='epsg:4326')#wgs84
+    inproj = Proj(init='epsg:'+str(epsg))#UTM 31N
+
+    x = transform(inproj, outproj,dist_lat ,dist_long_)[0] - transform(inproj, outproj,0 ,0)[0]
+    y = transform(inproj, outproj,dist_lat ,dist_long_)[1] - transform(inproj, outproj,0 ,0)[1] 
+
+    return x, y
+
+def dist_wgs84_to_metric(dist_lat, dist_long_,epsg):
+    inproj = Proj(init='epsg:4326')#wgs84
+    outproj = Proj(init='epsg:'+str(epsg))#UTM 31N
+
+    x = transform(outproj, inproj,dist_lat ,dist_long_)[0] - transform(outproj, inproj,0 ,0)[0]
+    y = transform(outproj, inproj,dist_lat ,dist_long_)[1] - transform(outproj, inproj,0 ,0)[1] 
+
+    return x, y
 
 def project_cam_in_gps (lat ,_long ,alt, roll, pitch, yaw, gpsx, gpsy , gpsz, camx, camy, camz):
 
